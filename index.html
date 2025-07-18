@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ứng dụng Theo dõi Tiến độ Công việc</title>
+    <!-- Tải Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tải thư viện Chart.js cho biểu đồ -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Tải Font Awesome cho các icon -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        /* Tùy chỉnh font chữ Inter */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Đảm bảo canvas có thể thay đổi kích thước */
+        canvas {
+            max-width: 100%;
+            height: auto;
+        }
+        /* Ẩn thanh cuộn cho textarea nếu không cần thiết */
+        textarea {
+            resize: none;
+            overflow: hidden;
+        }
+        /* Custom scrollbar for task lists */
+        .task-list-scroll {
+            max-height: 200px; /* Adjust as needed */
+            overflow-y: auto;
+            scrollbar-width: thin; /* Firefox */
+            scrollbar-color: #cbd5e1 #f8fafc; /* thumb and track track */
+        }
+        .task-list-scroll::-webkit-scrollbar {
+            width: 8px;
+        }
+        .task-list-scroll::-webkit-scrollbar-track {
+            background: #f8fafc;
+            border-radius: 10px;
+        }
+        .task-list-scroll::-webkit-scrollbar-thumb {
+            background-color: #cbd5e1;
+            border-radius: 10px;
+            border: 2px solid #f8fafc;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-4 sm:p-6 md:p-8">
+    <div class="max-w-7xl mx-auto bg-white rounded-xl shadow-lg p-6 sm:p-8">
+        <!-- Tiêu đề ứng dụng -->
+        <h1 class="text-3xl font-bold text-gray-800 mb-4 text-center">Theo dõi Tiến độ Công việc</h1>
+        <p class="text-center text-gray-600 mb-6">ID Người dùng của bạn (để chia sẻ): <span id="userIdDisplay" class="font-bold text-blue-600">Đang tải...</span></p>
+
+        <!-- Loading Indicator -->
+        <div class="text-center text-gray-500 py-8" id="loadingIndicator">Đang tải dữ liệu...</div>
+
+        <!-- View Mode Selector -->
+        <div class="flex justify-center gap-4 mb-6">
+            <button id="myTasksBtn" class="px-6 py-2 rounded-full bg-blue-500 text-white font-semibold shadow-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                Công việc của tôi
+            </button>
+            <button id="sharedTasksBtn" class="px-6 py-2 rounded-full bg-gray-200 text-gray-700 font-semibold shadow-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400">
+                Công việc chia sẻ
+            </button>
+        </div>
+
+        <!-- Input for Viewing Other User's Shared Tasks -->
+        <div id="viewOtherUserSection" class="mb-6 hidden">
+            <div class="flex items-center justify-center gap-2">
+                <label for="otherUserIdInput" class="text-gray-700 font-medium">Xem công việc của ID:</label>
+                <input type="text" id="otherUserIdInput" placeholder="Nhập ID người dùng khác" class="p-2 border border-gray-300 rounded-md flex-grow max-w-sm">
+                <button id="viewOtherUserBtn" class="px-4 py-2 rounded-md bg-green-500 text-white hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500">
+                    Xem
+                </button>
+                <button id="clearOtherUserBtn" class="px-4 py-2 rounded-md bg-red-500 text-white hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500">
+                    Xóa
+                </button>
+            </div>
+        </div>
+
+        <div class="flex flex-col lg:flex-row gap-6">
+            <!-- Phần bên trái: Lịch và Thói quen hàng tuần -->
+            <div class="lg:w-1/4 flex flex-col gap-6">
+                <!-- Phần Lịch Planner Week Start -->
+                <div class="bg-blue-50 p-4 rounded-lg shadow-md">
+                    <h2 class="text-lg font-semibold text-blue-800 mb-3">Planner Week Start</h2>
+                    <div class="flex justify-between items-center mb-2">
+                        <button id="prevWeekBtn" class="p-2 rounded-full bg-blue-200 hover:bg-blue-300 text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500"><i class="fas fa-chevron-left"></i></button>
+                        <div class="text-blue-600 font-medium text-xl" id="currentWeekStartDate"></div>
+                        <button id="nextWeekBtn" class="p-2 rounded-full bg-blue-200 hover:bg-blue-300 text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                    <div class="text-gray-600 text-lg mb-4" id="currentMonth"></div>
+                    <!-- Lịch mini -->
+                    <div id="calendarGrid" class="grid grid-cols-7 gap-1 text-center text-sm">
+                        <div class="font-bold text-gray-500">T2</div>
+                        <div class="font-bold text-gray-500">T3</div>
+                        <div class="font-bold text-gray-500">T4</div>
+                        <div class="font-bold text-gray-500">T5</div>
+                        <div class="font-bold text-gray-500">T6</div>
+                        <div class="font-bold text-gray-500">T7</div>
+                        <div class="font-bold text-gray-500">CN</div>
+                        <!-- Ngày trong tháng sẽ được JS tạo động -->
+                    </div>
+                    <p class="text-sm text-gray-500 mt-4">Ngày bắt đầu tuần: <span class="font-medium">Thứ Hai</span></p>
+                </div>
+
+                <!-- Phần Task Progress (biểu đồ đường) -->
+                <div class="bg-green-50 p-4 rounded-lg shadow-md">
+                    <h2 class="text-lg font-semibold text-green-800 mb-3">Task Progress (Tuần)</h2>
+                    <canvas id="weeklyTaskProgressChart"></canvas>
+                </div>
+
+                <!-- Phần Weekly Habits -->
+                <div class="bg-purple-50 p-4 rounded-lg shadow-md">
+                    <h2 class="text-lg font-semibold text-purple-800 mb-3">Thói quen hàng tuần</h2>
+                    <div id="weeklyHabitsContainer" class="space-y-2">
+                        <!-- Habits will be loaded here -->
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-700">Đọc sách</span>
+                            <div class="flex gap-1" data-habit-name="Đọc sách">
+                                <input type="checkbox" class="form-checkbox rounded text-purple-600" data-day="0">
+                                <input type="checkbox" class="form-checkbox rounded text-purple-600" data-day="1">
+                                <input type="checkbox" class="form-checkbox rounded text-purple-600" data-day="2">
+                                <input type="checkbox" class="form-checkbox rounded text-purple-600" data-day="3">
+                                <input type="checkbox" class="form-checkbox rounded text-purple-600" data-day="4">
+                                <input type="checkbox" class="form-checkbox rounded text-purple-600" data-day="5">
+                                <input type="checkbox" class="form-checkbox rounded text-purple-600" data-day="6">
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-700">Tập thể dục</span>
+                            <div class="flex gap-1" data-habit-name="Tập thể dục">
+                                <input type="checkbox" class="form-checkbox rounded text-purple-600" data-day="0">
+                                <input type="checkbox" class="form-checkbox rounded text-purple-600" data-day="1">
+                                <input type="checkbox" class="form-checkbox rounded text-purple-600" data-day="2">
+                                <input type="checkbox" class="form-checkbox rounded text-purple-600" data-day="3">
+                                <input type="checkbox" class="form-checkbox rounded text-purple-600" data-day="4">
+                                <input type="checkbox" class="form-checkbox rounded text-purple-600" data-day="5">
+                                <input type="checkbox" class="form-checkbox rounded text-purple-600" data-day="6">
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-700">Uống đủ nước</span>
+                            <div class="flex gap-1" data-habit-name="Uống đủ nước">
+                                <input type="checkbox" class="form-checkbox rounded text-purple-600" data-day="0">
+                                <input type="checkbox" class="form-checkbox rounded text-purple-600" data-day="1">
+                                <input type="checkbox" class="form-checkbox rounded text-purple-600" data-day="2">
+                                <input type="checkbox" class="form-checkbox rounded text-purple-600" data-day="3">
+                                <input type="checkbox" class="form-checkbox rounded text-purple-600" data-day="4">
+                                <input type="checkbox" class="form-checkbox rounded text-purple-600" data-day="5">
+                                <input type="checkbox" class="form-checkbox rounded text-purple-600" data-day="6">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Phần bên phải: Chi tiết công việc hàng ngày -->
+            <div id="dailyTaskCardsContainer" class="lg:w-3/4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <!-- Thẻ công việc cho các ngày sẽ được JS tạo động -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, query, where, addDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global variables provided by Canvas environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        // Provide a default empty object for firebaseConfig if __firebase_config is not defined or empty
+        const firebaseConfig = (typeof __firebase_config !== 'undefined' && __firebase_config) ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // Initialize Firebase
+        let app;
+        let db;
+        let auth;
+
+        if (Object.keys(firebaseConfig).length > 0) {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+        } else {
+            console.warn("Firebase config not found. Running in a limited mode without data persistence.");
+            // Create dummy Firebase objects to prevent errors if running without config
+            app = null;
+            db = null;
+            auth = {
+                currentUser: { uid: 'local-user' },
+                onAuthStateChanged: (callback) => {
+                    callback({ uid: 'local-user' });
+                    return () => {};
+                },
+                signInAnonymously: async () => ({ user: { uid: 'local-user' } }),
+                signInWithCustomToken: async () => ({ user: { uid: 'local-user' } })
+            };
+        }
+
+        let userId = null;
+        let isAuthReady = false;
+        let currentWeekStart = new Date(); // Global variable to track the current week
+        let currentView = 'myTasks'; // 'myTasks' or 'sharedTasks'
+        let viewingSharedUserId = null; // To view specific shared tasks of another user
+
+        // Initialize Chart.js charts (will be updated dynamically)
+        let dailyProgressCharts = {}; // Stores instances of doughnut charts
+        let weeklyTaskProgressChart = null; // Stores instance of line chart
+
+        // --- Firebase Authentication ---
+        if (auth) { // Only attach listener if auth is properly initialized
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    userId = user.uid;
+                    document.getElementById('userIdDisplay').textContent = userId;
+                    isAuthReady = true;
+                    console.log("Firebase initialized and authenticated. User ID:", userId);
+                    await initializeAppData(); // Load data after authentication
+                } else {
+                    // Sign in anonymously if no initial token
+                    try {
+                        if (initialAuthToken) {
+                            await signInWithCustomToken(auth, initialAuthToken);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch (error) {
+                        console.error("Error signing in:", error);
+                        document.getElementById('userIdDisplay').textContent = "Lỗi xác thực!";
+                    }
+                }
+            });
+        } else { // If auth is dummy, immediately set user ID and initialize app
+            userId = 'local-user';
+            document.getElementById('userIdDisplay').textContent = userId;
+            isAuthReady = true;
+            console.log("Running in local mode with dummy user ID.");
+            renderApp(); // Render immediately for local mode
+            document.getElementById('loadingIndicator').classList.add('hidden');
+        }
+
+        // --- Firestore Data Management ---
+        const getPublicCollectionRef = (collectionName) => {
+            if (!db) { console.warn("Firestore not initialized."); return null; }
+            return collection(db, `artifacts/${appId}/public/data/${collectionName}`);
+        };
+        const getPrivateCollectionRef = (collectionName) => {
+            if (!db) { console.warn("Firestore not initialized."); return null; }
+            return collection(db, `artifacts/${appId}/users/${userId}/${collectionName}`);
+        };
+
+        // Stores task data and habits
+        let tasksByDate = {}; // { 'YYYY-MM-DD': [{ id: '...', text: '...', completed: true, isShared: false, ownerId: '...' }, ...] }
+        let weeklyHabits = {}; // { 'habitName': [true, false, true, ... (7 days)] }
+
+        let unsubscribePrivateTasks = null;
+        let unsubscribeSharedTasks = null;
+        let unsubscribeWeeklyHabits = null;
+
+        // Listen for data changes from Firestore
+        async function initializeAppData() {
+            if (!isAuthReady || !db) return; // Ensure authentication and Firestore are ready
+
+            // Unsubscribe from previous listeners to avoid memory leaks/duplicate calls
+            if (unsubscribePrivateTasks) unsubscribePrivateTasks();
+            if (unsubscribeSharedTasks) unsubscribeSharedTasks();
+            if (unsubscribeWeeklyHabits) unsubscribeWeeklyHabits();
+
+            // Listen to private tasks
+            const privateTasksColRef = getPrivateCollectionRef('tasks');
+            if (privateTasksColRef) {
+                unsubscribePrivateTasks = onSnapshot(privateTasksColRef, (snapshot) => {
+                    const newTasks = {};
+                    snapshot.docs.forEach(doc => {
+                        const task = doc.data();
+                        task.id = doc.id;
+                        if (!newTasks[task.date]) {
+                            newTasks[task.date] = [];
+                        }
+                        newTasks[task.date].push(task);
+                    });
+                    if (currentView === 'myTasks') {
+                        tasksByDate = newTasks;
+                        console.log("My Tasks loaded/updated:", tasksByDate);
+                        renderApp(); // Update UI when data changes
+                    }
+                }, (error) => {
+                    console.error("Error fetching private tasks:", error);
+                });
+            }
+
+            // Listen to shared tasks
+            const sharedTasksColRef = getPublicCollectionRef('shared_tasks');
+            if (sharedTasksColRef) {
+                let q = collection(db, `artifacts/${appId}/public/data/shared_tasks`);
+                if (viewingSharedUserId && viewingSharedUserId !== userId) {
+                    q = query(q, where("ownerId", "==", viewingSharedUserId));
+                } else if (currentView === 'sharedTasks' && !viewingSharedUserId) {
+                    // If viewing all shared tasks (no specific user ID entered),
+                    // we might want to show all shared tasks, or just our own shared tasks.
+                    // For "theo dõi tiến độ của những người khác", it implies filtering.
+                    // Let's default to showing only our own shared tasks if no other ID is entered.
+                    // Or, for true "public" view, remove the where clause.
+                    // For now, let's make it show *all* shared tasks if no specific ID is entered,
+                    // but allow filtering by ownerId if provided.
+                    // To show *all* shared tasks, no 'where' clause is needed here.
+                    // If the intent is to only show *my own* shared tasks when in 'sharedTasks' view without an entered ID,
+                    // add: q = query(q, where("ownerId", "==", userId));
+                }
+
+                unsubscribeSharedTasks = onSnapshot(q, (snapshot) => {
+                    const newTasks = {};
+                    snapshot.docs.forEach(doc => {
+                        const task = doc.data();
+                        task.id = doc.id;
+                        if (!newTasks[task.date]) {
+                            newTasks[task.date] = [];
+                        }
+                        newTasks[task.date].push(task);
+                    });
+                    if (currentView === 'sharedTasks') {
+                        tasksByDate = newTasks;
+                        console.log("Shared Tasks loaded/updated:", tasksByDate);
+                        renderApp(); // Update UI when data changes
+                    }
+                }, (error) => {
+                    console.error("Error fetching shared tasks:", error);
+                });
+            }
+
+
+            // Listen to weekly habits (stored per current week)
+            const weekKey = getWeekKey(currentWeekStart);
+            const weeklyHabitsDocRef = db ? doc(getPrivateCollectionRef('weeklyHabits'), weekKey) : null;
+
+            if (weeklyHabitsDocRef) {
+                unsubscribeWeeklyHabits = onSnapshot(weeklyHabitsDocRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        weeklyHabits = docSnap.data().habits || {};
+                    } else {
+                        // Reset habits if no data for current week
+                        weeklyHabits = {
+                            "Đọc sách": Array(7).fill(false),
+                            "Tập thể dục": Array(7).fill(false),
+                            "Uống đủ nước": Array(7).fill(false)
+                        };
+                    }
+                    console.log("Weekly habits loaded/updated:", weeklyHabits);
+                    renderWeeklyHabits(); // Update habit UI
+                }, (error) => {
+                    console.error("Error fetching weekly habits:", error);
+                });
+            }
+        }
+
+        // --- Date and Calendar Functions ---
+        function getWeekKey(date) {
+            const d = new Date(date);
+            d.setHours(0, 0, 0, 0);
+            const day = d.getDay();
+            const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust to Monday
+            const monday = new Date(d.setDate(diff));
+            return monday.toISOString().split('T')[0]; // 'YYYY-MM-DD' of Monday
+        }
+
+        function getMonday(date) {
+            const d = new Date(date);
+            d.setHours(0, 0, 0, 0);
+            const day = d.getDay();
+            const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust to Monday
+            return new Date(d.setDate(diff));
+        }
+
+        function formatDate(date) {
+            const options = { day: 'numeric', month: 'long', year: 'numeric' };
+            return date.toLocaleDateString('vi-VN', options);
+        }
+
+        function getDayName(dayIndex) {
+            const days = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+            return days[dayIndex];
+        }
+
+        function getShortDayName(dayIndex) {
+            const days = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+            return days[dayIndex];
+        }
+
+        function renderCalendar() {
+            const mondayOfCurrentWeek = getMonday(currentWeekStart);
+            document.getElementById('currentWeekStartDate').textContent = formatDate(mondayOfCurrentWeek);
+            document.getElementById('currentMonth').textContent = mondayOfCurrentWeek.toLocaleDateString('vi-VN', { month: 'long' });
+
+            const calendarGrid = document.getElementById('calendarGrid');
+            calendarGrid.innerHTML = `
+                <div class="font-bold text-gray-500">T2</div>
+                <div class="font-bold text-gray-500">T3</div>
+                <div class="font-bold text-gray-500">T4</div>
+                <div class="font-bold text-gray-500">T5</div>
+                <div class="font-bold text-gray-500">T6</div>
+                <div class="font-bold text-gray-500">T7</div>
+                <div class="font-bold text-gray-500">CN</div>
+            `; // Reset days
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            // Calculate days of the month to fill the calendar grid
+            const firstDayOfMonth = new Date(mondayOfCurrentWeek.getFullYear(), mondayOfCurrentWeek.getMonth(), 1);
+            const lastDayOfMonth = new Date(mondayOfCurrentWeek.getFullYear(), mondayOfCurrentWeek.getMonth() + 1, 0);
+
+            // Determine the start of the grid (may be previous month's days)
+            let startDay = new Date(firstDayOfMonth);
+            const firstDayOfWeek = firstDayOfMonth.getDay(); // 0 for Sunday, 1 for Monday
+            const diff = firstDayOfMonth.getDate() - firstDayOfWeek + (firstDayOfWeek === 0 ? -6 : 1); // Adjust to Monday
+            startDay = new Date(firstDayOfMonth.setDate(diff));
+
+            // Render 42 days (6 weeks) to cover the full calendar view
+            for (let i = 0; i < 42; i++) {
+                const day = new Date(startDay);
+                day.setDate(startDay.getDate() + i);
+                const dayElement = document.createElement('div');
+                dayElement.classList.add('p-1', 'rounded-full', 'cursor-pointer');
+                dayElement.textContent = day.getDate();
+
+                // Style for days outside current month
+                if (day.getMonth() !== mondayOfCurrentWeek.getMonth()) {
+                    dayElement.classList.add('text-gray-400');
+                } else {
+                    dayElement.classList.add('text-gray-700');
+                }
+
+                // Highlight current day
+                if (day.toDateString() === today.toDateString()) {
+                    dayElement.classList.remove('text-gray-400', 'text-gray-700');
+                    dayElement.classList.add('bg-blue-500', 'text-white', 'font-bold');
+                }
+                calendarGrid.appendChild(dayElement);
+            }
+        }
+
+        document.getElementById('prevWeekBtn').addEventListener('click', () => {
+            currentWeekStart.setDate(currentWeekStart.getDate() - 7);
+            if (db) {
+                initializeAppData(); // Re-initialize listeners for new week to fetch relevant data
+                saveWeeklyHabits(); // Save habits when changing week
+            } else {
+                renderApp(); // Render UI without data persistence
+            }
+        });
+
+        document.getElementById('nextWeekBtn').addEventListener('click', () => {
+            currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+            if (db) {
+                initializeAppData(); // Re-initialize listeners for new week to fetch relevant data
+                saveWeeklyHabits(); // Save habits when changing week
+            } else {
+                renderApp(); // Render UI without data persistence
+            }
+        });
+
+        // --- Task Rendering and Interaction ---
+        const dailyCardColors = {
+            0: { bg: 'bg-red-100', text: 'text-red-800', progress: '#EF4444' }, // Sunday (CN)
+            1: { bg: 'bg-blue-100', text: 'text-blue-800', progress: '#3B82F6' }, // Monday (T2)
+            2: { bg: 'bg-green-100', text: 'text-green-800', progress: '#22C55E' }, // Tuesday (T3)
+            3: { bg: 'bg-purple-100', text: 'text-purple-800', progress: '#A855F7' }, // Wednesday (T4)
+            4: { bg: 'bg-yellow-100', text: 'text-yellow-800', progress: '#F59E0B' }, // Thursday (T5)
+            5: { bg: 'bg-indigo-100', text: 'text-indigo-800', progress: '#6366F1' }, // Friday (T6)
+            6: { bg: 'bg-pink-100', text: 'text-pink-800', progress: '#EC4899' }  // Saturday (T7)
+        };
+
+        function renderDailyTaskCards() {
+            const container = document.getElementById('dailyTaskCardsContainer');
+            container.innerHTML = ''; // Clear previous cards
+            document.getElementById('loadingIndicator').classList.add('hidden'); // Hide loading
+
+            const mondayOfCurrentWeek = getMonday(currentWeekStart);
+
+            for (let i = 0; i < 7; i++) {
+                const currentDate = new Date(mondayOfCurrentWeek);
+                currentDate.setDate(mondayOfCurrentWeek.getDate() + i);
+                const dateString = currentDate.toISOString().split('T')[0]; // YYYY-MM-DD
+                const dayOfWeek = currentDate.getDay(); // 0 for Sunday, 1 for Monday
+
+                const tasksForDay = tasksByDate[dateString] || [];
+                const doneTasks = tasksForDay.filter(task => task.completed).length;
+                const totalTasks = tasksForDay.length;
+                const pendingTasks = totalTasks - doneTasks;
+                const percentage = totalTasks === 0 ? 0 : Math.round((doneTasks / totalTasks) * 100);
+
+                const colors = dailyCardColors[dayOfWeek];
+
+                const cardHtml = `
+                    <div class="${colors.bg} p-4 rounded-lg shadow-md flex flex-col">
+                        <h2 class="text-xl font-bold ${colors.text} mb-2">${getDayName(dayOfWeek)}</h2>
+                        <p class="text-sm text-gray-600 mb-4">${formatDate(currentDate)}</p>
+                        <div class="flex items-center justify-center mb-4">
+                            <canvas id="progressChart-${dateString}" class="w-24 h-24"></canvas>
+                        </div>
+                        <p class="text-center ${colors.text} font-semibold mb-4">Tiến độ công việc</p>
+                        <div class="bg-white p-3 rounded-md mb-4 flex-grow">
+                            <p class="text-gray-700 font-medium mb-2">Mục tiêu chính</p>
+                            <textarea
+                                class="w-full p-2 border border-gray-300 rounded-md text-sm main-focus-textarea"
+                                rows="3"
+                                placeholder="Nhập mục tiêu chính..."
+                                data-date="${dateString}"
+                                ${currentView === 'sharedTasks' && viewingSharedUserId !== userId ? 'readonly' : ''}
+                            >${tasksForDay.find(t => t.isMainFocus)?.text || ''}</textarea>
+                        </div>
+                        <div class="flex justify-between text-sm font-semibold text-gray-700 mb-3">
+                            <span>HOÀN THÀNH: <span class="text-green-600">${doneTasks}</span></span>
+                            <span>ĐANG CHỜ: <span class="text-yellow-600">${pendingTasks}</span></span>
+                            <span>TỔNG CỘNG: <span class="${colors.text}">${totalTasks}</span></span>
+                        </div>
+                        <h3 class="text-md font-semibold text-gray-800 mb-2">Công việc hôm nay:</h3>
+                        <ul class="space-y-2 text-sm task-list-scroll" data-date="${dateString}">
+                            ${tasksForDay.filter(t => !t.isMainFocus).map(task => `
+                                <li class="flex items-center justify-between group">
+                                    <label class="flex items-center flex-grow cursor-pointer">
+                                        <input type="checkbox" class="form-checkbox rounded ${colors.text.replace('text-', 'text-')} mr-2" ${task.completed ? 'checked' : ''} data-task-id="${task.id}" ${currentView === 'sharedTasks' && viewingSharedUserId !== userId ? 'disabled' : ''}>
+                                        <span class="text-gray-700 ${task.completed ? 'line-through' : ''} flex-grow">${task.text}
+                                            ${task.ownerId && currentView === 'sharedTasks' && task.ownerId !== userId ? `<span class="text-xs text-gray-500 ml-2">(của: ${task.ownerId.substring(0, 6)}...)</span>` : ''}
+                                        </span>
+                                    </label>
+                                    <div class="flex items-center ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        ${(currentView === 'myTasks' || (currentView === 'sharedTasks' && task.ownerId === userId)) ? `
+                                            <button class="text-gray-500 hover:text-blue-600 p-1 rounded-full edit-task-btn" data-task-id="${task.id}" data-task-text="${task.text}" data-date="${dateString}" data-is-shared="${task.isShared}">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button class="text-gray-500 hover:text-red-600 p-1 rounded-full delete-task-btn" data-task-id="${task.id}" data-date="${dateString}" data-is-shared="${task.isShared}">
+                                                <i class="fas fa-trash-alt"></i>
+                                            </button>
+                                        ` : ''}
+                                    </div>
+                                </li>
+                            `).join('')}
+                        </ul>
+                        <div class="mt-4 flex flex-col">
+                            <div class="flex">
+                                <input type="text" placeholder="Thêm công việc mới..." class="flex-grow p-2 border border-gray-300 rounded-l-md text-sm new-task-input" data-date="${dateString}" ${currentView === 'sharedTasks' && viewingSharedUserId !== userId ? 'readonly' : ''}>
+                                <button class="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-r-md add-task-btn" data-date="${dateString}" ${currentView === 'sharedTasks' && viewingSharedUserId !== userId ? 'disabled' : ''}>
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                            ${currentView === 'myTasks' ? `
+                                <div class="flex items-center mt-2">
+                                    <input type="checkbox" id="isSharedCheckbox-${dateString}" class="form-checkbox rounded text-green-600 mr-2">
+                                    <label for="isSharedCheckbox-${dateString}" class="text-sm text-gray-700">Chia sẻ công việc này?</label>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', cardHtml);
+                createProgressChart(`progressChart-${dateString}`, percentage, colors.progress);
+            }
+            attachTaskEventListeners();
+            updateWeeklyProgressChart();
+            attachMainFocusListeners();
+        }
+
+        // Function to create doughnut progress chart
+        function createProgressChart(canvasId, percentage, color) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return; // Ensure canvas exists
+
+            // Destroy existing chart if it exists to prevent duplicates
+            if (dailyProgressCharts[canvasId]) {
+                dailyProgressCharts[canvasId].destroy();
+            }
+
+            const ctx = canvas.getContext('2d');
+            dailyProgressCharts[canvasId] = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    datasets: [{
+                        data: [percentage, 100 - percentage],
+                        backgroundColor: [color, '#e0e0e0'], // Progress color and background color
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '80%', // Thickness of the ring
+                    plugins: {
+                        tooltip: { enabled: false }, // Disable tooltip
+                        legend: { display: false } // Disable legend
+                    },
+                    elements: {
+                        arc: { borderRadius: 5 } // Rounded corners for arc segments
+                    }
+                },
+                plugins: [{
+                    // Plugin to display percentage in the center of the chart
+                    id: 'textCenter',
+                    beforeDraw: function(chart) {
+                        const { ctx, width, height } = chart;
+                        ctx.restore();
+                        const fontSize = (height / 114).toFixed(2);
+                        ctx.font = `${fontSize}em sans-serif`;
+                        ctx.textBaseline = 'middle';
+                        const text = `${percentage}%`;
+                        const textX = Math.round((width - ctx.measureText(text).width) / 2);
+                        const textY = height / 2;
+                        ctx.fillText(text, textX, textY);
+                        ctx.save();
+                    }
+                }]
+            });
+        }
+
+        // Update weekly progress chart
+        function updateWeeklyProgressChart() {
+            const mondayOfCurrentWeek = getMonday(currentWeekStart);
+            const weeklyProgressDataPoints = [];
+            const labels = [];
+
+            for (let i = 0; i < 7; i++) {
+                const currentDate = new Date(mondayOfCurrentWeek);
+                currentDate.setDate(mondayOfCurrentWeek.getDate() + i);
+                const dateString = currentDate.toISOString().split('T')[0];
+                labels.push(getShortDayName(currentDate.getDay()));
+
+                const tasksForDay = tasksByDate[dateString] || [];
+                const doneTasks = tasksForDay.filter(task => task.completed && !task.isMainFocus).length;
+                const totalTasks = tasksForDay.filter(task => !task.isMainFocus).length;
+                const percentage = totalTasks === 0 ? 0 : Math.round((doneTasks / totalTasks) * 100);
+                weeklyProgressDataPoints.push(percentage);
+            }
+
+            const weeklyProgressConfig = {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Task Progress',
+                        data: weeklyProgressDataPoints,
+                        borderColor: '#10B981', // Emerald green
+                        backgroundColor: 'rgba(16, 185, 129, 0.2)', // Background color
+                        tension: 0.4, // Line tension
+                        fill: true,
+                        pointBackgroundColor: '#10B981',
+                        pointBorderColor: '#fff',
+                        pointRadius: 5,
+                        pointHoverRadius: 7
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }, // Disable legend
+                        title: { display: false }
+                    },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                callback: function(value) { return value + '%'; }
+                            },
+                            grid: { color: '#e0e0e0' }
+                        }
+                    }
+                }
+            };
+
+            const canvas = document.getElementById('weeklyTaskProgressChart');
+            if (weeklyTaskProgressChart) {
+                weeklyTaskProgressChart.destroy(); // Destroy old chart if exists
+            }
+            weeklyTaskProgressChart = new Chart(canvas, weeklyProgressConfig);
+        }
+
+        // --- Task CRUD Operations ---
+        async function addTask(dateString, text, isShared = false) {
+            if (!text.trim() || !userId || !db) return;
+            const collectionRef = isShared ? getPublicCollectionRef('shared_tasks') : getPrivateCollectionRef('tasks');
+            if (!collectionRef) return;
+
+            try {
+                await addDoc(collectionRef, {
+                    text: text.trim(),
+                    completed: false,
+                    date: dateString,
+                    userId: userId, // The user who created this task
+                    ownerId: userId, // Explicitly store ownerId for shared tasks
+                    isShared: isShared,
+                    createdAt: new Date().toISOString(),
+                    isMainFocus: false
+                });
+            } catch (e) {
+                console.error("Error adding document: ", e);
+            }
+        }
+
+        async function updateTask(taskId, dateString, updates, isShared = false) {
+            if (!userId || !db) return;
+            const collectionRef = isShared ? getPublicCollectionRef('shared_tasks') : getPrivateCollectionRef('tasks');
+            if (!collectionRef) return;
+
+            try {
+                const taskRef = doc(collectionRef, taskId);
+                await updateDoc(taskRef, updates);
+            } catch (e) {
+                console.error("Error updating document: ", e);
+            }
+        }
+
+        async function deleteTask(taskId, isShared = false) {
+            if (!userId || !db) return;
+            const collectionRef = isShared ? getPublicCollectionRef('shared_tasks') : getPrivateCollectionRef('tasks');
+            if (!collectionRef) return;
+
+            try {
+                const taskRef = doc(collectionRef, taskId);
+                await deleteDoc(taskRef);
+            } catch (e) {
+                console.error("Error deleting document: ", e);
+            }
+        }
+
+        // --- Event Listeners for Tasks ---
+        function attachTaskEventListeners() {
+            // Add Task
+            document.querySelectorAll('.add-task-btn').forEach(button => {
+                button.onclick = async () => {
+                    const date = button.dataset.date;
+                    const input = button.previousElementSibling;
+                    const isSharedCheckbox = document.getElementById(`isSharedCheckbox-${date}`);
+                    const isShared = isSharedCheckbox ? isSharedCheckbox.checked : false; // Only exists in 'myTasks' view
+                    await addTask(date, input.value, isShared);
+                    input.value = ''; // Clear input
+                    if (isSharedCheckbox) isSharedCheckbox.checked = false; // Reset checkbox
+                };
+            });
+
+            document.querySelectorAll('.new-task-input').forEach(input => {
+                input.onkeypress = async (e) => {
+                    if (e.key === 'Enter') {
+                        const date = input.dataset.date;
+                        const isSharedCheckbox = document.getElementById(`isSharedCheckbox-${date}`);
+                        const isShared = isSharedCheckbox ? isSharedCheckbox.checked : false;
+                        await addTask(date, input.value, isShared);
+                        input.value = ''; // Clear input
+                        if (isSharedCheckbox) isSharedCheckbox.checked = false; // Reset checkbox
+                    }
+                };
+            });
+
+            // Toggle Task Completion
+            document.querySelectorAll('.form-checkbox').forEach(checkbox => {
+                checkbox.onchange = async (e) => {
+                    const taskId = e.target.dataset.taskId;
+                    const isShared = e.target.closest('li').querySelector('.edit-task-btn')?.dataset.isShared === 'true'; // Check if it's a shared task
+                    await updateTask(taskId, null, { completed: e.target.checked }, isShared);
+                };
+            });
+
+            // Edit Task
+            document.querySelectorAll('.edit-task-btn').forEach(button => {
+                button.onclick = async () => {
+                    const taskId = button.dataset.taskId;
+                    const currentText = button.dataset.taskText;
+                    const isShared = button.dataset.isShared === 'true';
+                    const newText = prompt("Chỉnh sửa công việc:", currentText); // Using prompt for simplicity, consider a custom modal
+                    if (newText !== null && newText.trim() !== "") {
+                        await updateTask(taskId, null, { text: newText.trim() }, isShared);
+                    }
+                };
+            });
+
+            // Delete Task
+            document.querySelectorAll('.delete-task-btn').forEach(button => {
+                button.onclick = async () => {
+                    const taskId = button.dataset.taskId;
+                    const isShared = button.dataset.isShared === 'true';
+                    if (confirm("Bạn có chắc chắn muốn xóa công việc này?")) { // Using confirm for simplicity, consider a custom modal
+                        await deleteTask(taskId, isShared);
+                    }
+                };
+            });
+        }
+
+        // --- Main Focus Textarea Logic ---
+        function attachMainFocusListeners() {
+            document.querySelectorAll('.main-focus-textarea').forEach(textarea => {
+                // Auto-resize textarea
+                textarea.addEventListener('input', function() {
+                    this.style.height = 'auto';
+                    this.style.height = (this.scrollHeight) + 'px';
+                });
+                // Initial resize
+                textarea.style.height = 'auto';
+                textarea.style.height = (textarea.scrollHeight) + 'px';
+
+                // Save on blur
+                textarea.addEventListener('blur', async () => {
+                    if (currentView === 'sharedTasks' && viewingSharedUserId !== userId) {
+                        return; // Prevent editing others' main focus
+                    }
+
+                    const dateString = textarea.dataset.date;
+                    const tasksForDay = tasksByDate[dateString] || [];
+                    const currentMainFocusTask = tasksForDay.find(t => t.isMainFocus && t.ownerId === userId); // Only find our own main focus
+
+                    if (textarea.value.trim() === "") {
+                        // If textarea is empty, delete the main focus task if it exists
+                        if (currentMainFocusTask) {
+                            await deleteTask(currentMainFocusTask.id, currentMainFocusTask.isShared);
+                        }
+                    } else {
+                        // If textarea has content, update or create main focus task
+                        if (currentMainFocusTask) {
+                            await updateTask(currentMainFocusTask.id, dateString, { text: textarea.value.trim() }, currentMainFocusTask.isShared);
+                        } else {
+                            // Create new main focus task (always private for now)
+                            await addTask(dateString, textarea.value.trim(), false); // Main focus is always private
+                            // We need to explicitly set isMainFocus after adding
+                            // This is a slight simplification, ideally main focus would be a separate field or handled differently
+                            // For simplicity, let's update the task just created to be main focus
+                            // This requires fetching the newly created task's ID, which is complex with addDoc.
+                            // A better approach would be to have a dedicated 'mainFocus' field per day, or store it as part of the daily document.
+                            // For now, let's assume main focus tasks are distinct and are handled by the blur event.
+                            // A quick fix: if no main focus exists, create one as a regular task and then update its isMainFocus property.
+                            const newTaskRef = await addDoc(getPrivateCollectionRef('tasks'), {
+                                text: textarea.value.trim(),
+                                completed: false,
+                                date: dateString,
+                                userId: userId,
+                                ownerId: userId,
+                                createdAt: new Date().toISOString(),
+                                isMainFocus: true,
+                                isShared: false // Main focus is always private
+                            });
+                        }
+                    }
+                });
+            });
+        }
+
+        // --- Weekly Habits Logic ---
+        async function saveWeeklyHabits() {
+            if (!userId || !db) return;
+            const weekKey = getWeekKey(currentWeekStart);
+            const weeklyHabitsDocRef = doc(getPrivateCollectionRef('weeklyHabits'), weekKey);
+            try {
+                await setDoc(weeklyHabitsDocRef, { habits: weeklyHabits, userId: userId }, { merge: true });
+                console.log("Weekly habits saved for week:", weekKey);
+            } catch (e) {
+                console.error("Error saving weekly habits:", e);
+            }
+        }
+
+        async function loadWeeklyHabitsForCurrentWeek() {
+            if (!userId || !db) return;
+            const weekKey = getWeekKey(currentWeekStart);
+            const weeklyHabitsDocRef = doc(getPrivateCollectionRef('weeklyHabits'), weekKey);
+            const docSnap = await getDoc(weeklyHabitsDocRef);
+            if (docSnap.exists()) {
+                weeklyHabits = docSnap.data().habits || {};
+            } else {
+                // Reset habits if no data for current week
+                weeklyHabits = {
+                    "Đọc sách": Array(7).fill(false),
+                    "Tập thể dục": Array(7).fill(false),
+                    "Uống đủ nước": Array(7).fill(false)
+                };
+            }
+            renderWeeklyHabits();
+        }
+
+        function renderWeeklyHabits() {
+            const habitContainers = document.querySelectorAll('#weeklyHabitsContainer > div');
+            habitContainers.forEach(container => {
+                const habitName = container.querySelector('span').textContent;
+                const checkboxes = container.querySelectorAll('input[type="checkbox"]');
+                const savedHabitDays = weeklyHabits[habitName] || Array(7).fill(false);
+
+                checkboxes.forEach((checkbox, index) => {
+                    checkbox.checked = savedHabitDays[index];
+                    checkbox.onchange = async (e) => {
+                        weeklyHabits[habitName][index] = e.target.checked;
+                        await saveWeeklyHabits();
+                    };
+                });
+            });
+        }
+
+        // --- View Mode Logic ---
+        function setViewMode(mode) {
+            currentView = mode;
+            document.getElementById('myTasksBtn').classList.remove('bg-blue-500', 'text-white');
+            document.getElementById('myTasksBtn').classList.add('bg-gray-200', 'text-gray-700');
+            document.getElementById('sharedTasksBtn').classList.remove('bg-blue-500', 'text-white');
+            document.getElementById('sharedTasksBtn').classList.add('bg-gray-200', 'text-gray-700');
+
+            if (mode === 'myTasks') {
+                document.getElementById('myTasksBtn').classList.add('bg-blue-500', 'text-white');
+                document.getElementById('viewOtherUserSection').classList.add('hidden');
+                viewingSharedUserId = null; // Reset viewing ID when switching to my tasks
+                document.getElementById('otherUserIdInput').value = '';
+            } else { // 'sharedTasks'
+                document.getElementById('sharedTasksBtn').classList.add('bg-blue-500', 'text-white');
+                document.getElementById('viewOtherUserSection').classList.remove('hidden');
+            }
+            if (db) initializeAppData(); // Re-fetch data based on new view mode
+            else renderApp(); // For local mode, just re-render
+        }
+
+        document.getElementById('myTasksBtn').addEventListener('click', () => setViewMode('myTasks'));
+        document.getElementById('sharedTasksBtn').addEventListener('click', () => setViewMode('sharedTasks'));
+
+        document.getElementById('viewOtherUserBtn').addEventListener('click', () => {
+            const inputId = document.getElementById('otherUserIdInput').value.trim();
+            if (inputId) {
+                viewingSharedUserId = inputId;
+                if (db) initializeAppData();
+                else renderApp();
+            } else {
+                alert("Vui lòng nhập ID người dùng để xem công việc chia sẻ.");
+            }
+        });
+
+        document.getElementById('clearOtherUserBtn').addEventListener('click', () => {
+            viewingSharedUserId = null;
+            document.getElementById('otherUserIdInput').value = '';
+            if (db) initializeAppData();
+            else renderApp();
+        });
+
+        // --- Main Render Function ---
+        function renderApp() {
+            renderCalendar();
+            renderDailyTaskCards();
+            renderWeeklyHabits(); // Make sure habits are rendered after data is loaded
+        }
+
+        // Initial render when script loads
+        document.getElementById('loadingIndicator').classList.remove('hidden');
+        setViewMode('myTasks'); // Set default view mode
+    </script>
+</body>
+</html>
