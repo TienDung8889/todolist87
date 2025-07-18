@@ -171,15 +171,16 @@
 
         // Global variables provided by Canvas environment
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        // Provide a default empty object for firebaseConfig if __firebase_config is not defined or empty
+        // Your Firebase project configuration (replace with your actual config from Firebase Console)
         const firebaseConfig = {
-		apiKey: "AIzaSyDTrYbSFy_A86Xh4xQaGMHyV4YlEZzTDag",
-		authDomain: "todolist87-7e181.firebaseapp.com",
-		projectId: "todolist87-7e181",
-		storageBucket: "todolist87-7e181.firebasestorage.app",
-		messagingSenderId: "99791674796",
-		appId: "1:99791674796:web:e083f0094ff672f915ae09",
-		measurementId: "G-EY28JXRBHT"
+          apiKey: "AIzaSyDTrYbSFy_A86Xh4xQaGMHyV4YlEZzTDag",
+          authDomain: "todolist87-7e181.firebaseapp.com",
+          projectId: "todolist87-7e181",
+          storageBucket: "todolist87-7e181.firebasestorage.app",
+          messagingSenderId: "99791674796",
+          appId: "1:99791674796:web:e083f0094ff672f915ae09",
+          measurementId: "G-EY28JXRBHT"
+        };
 
         // Initialize Firebase
         let app;
@@ -228,11 +229,10 @@
                 } else {
                     // Sign in anonymously if no initial token
                     try {
-                        if (initialAuthToken) {
-                            await signInWithCustomToken(auth, initialAuthToken);
-                        } else {
-                            await signInAnonymously(auth);
-                        }
+                        // The initialAuthToken is only provided by the Canvas environment.
+                        // When running locally or deployed via GitHub Pages, it will be null.
+                        // In such cases, we always sign in anonymously.
+                        await signInAnonymously(auth);
                     } catch (error) {
                         console.error("Error signing in:", error);
                         document.getElementById('userIdDisplay').textContent = "Lỗi xác thực!";
@@ -260,7 +260,7 @@
 
         // Stores task data and habits
         let tasksByDate = {}; // { 'YYYY-MM-DD': [{ id: '...', text: '...', completed: true, isShared: false, ownerId: '...' }, ...] }
-        let weeklyHabits = {}; // { 'habitName': [true, false, true, ... (7 days)] }
+        let weeklyHabits = {}; // { 'habitName': [true, false, true, true, true, true, true] }
 
         let unsubscribePrivateTasks = null;
         let unsubscribeSharedTasks = null;
@@ -306,15 +306,8 @@
                     q = query(q, where("ownerId", "==", viewingSharedUserId));
                 } else if (currentView === 'sharedTasks' && !viewingSharedUserId) {
                     // If viewing all shared tasks (no specific user ID entered),
-                    // we might want to show all shared tasks, or just our own shared tasks.
-                    // For "theo dõi tiến độ của những người khác", it implies filtering.
-                    // Let's default to showing only our own shared tasks if no other ID is entered.
-                    // Or, for true "public" view, remove the where clause.
-                    // For now, let's make it show *all* shared tasks if no specific ID is entered,
-                    // but allow filtering by ownerId if provided.
-                    // To show *all* shared tasks, no 'where' clause is needed here.
-                    // If the intent is to only show *my own* shared tasks when in 'sharedTasks' view without an entered ID,
-                    // add: q = query(q, where("ownerId", "==", userId));
+                    // we want to show all shared tasks.
+                    // No 'where' clause is needed here for a truly public view.
                 }
 
                 unsubscribeSharedTasks = onSnapshot(q, (snapshot) => {
@@ -765,7 +758,13 @@
             document.querySelectorAll('.form-checkbox').forEach(checkbox => {
                 checkbox.onchange = async (e) => {
                     const taskId = e.target.dataset.taskId;
-                    const isShared = e.target.closest('li').querySelector('.edit-task-btn')?.dataset.isShared === 'true'; // Check if it's a shared task
+                    // Find the task in tasksByDate to get its isShared status
+                    let taskToUpdate = null;
+                    for (const date in tasksByDate) {
+                        taskToUpdate = tasksByDate[date].find(task => task.id === taskId);
+                        if (taskToUpdate) break;
+                    }
+                    const isShared = taskToUpdate ? taskToUpdate.isShared : false;
                     await updateTask(taskId, null, { completed: e.target.checked }, isShared);
                 };
             });
@@ -828,7 +827,6 @@
                             await updateTask(currentMainFocusTask.id, dateString, { text: textarea.value.trim() }, currentMainFocusTask.isShared);
                         } else {
                             // Create new main focus task (always private for now)
-                            await addTask(dateString, textarea.value.trim(), false); // Main focus is always private
                             // We need to explicitly set isMainFocus after adding
                             // This is a slight simplification, ideally main focus would be a separate field or handled differently
                             // For simplicity, let's update the task just created to be main focus
@@ -836,7 +834,7 @@
                             // A better approach would be to have a dedicated 'mainFocus' field per day, or store it as part of the daily document.
                             // For now, let's assume main focus tasks are distinct and are handled by the blur event.
                             // A quick fix: if no main focus exists, create one as a regular task and then update its isMainFocus property.
-                            const newTaskRef = await addDoc(getPrivateCollectionRef('tasks'), {
+                            await addDoc(getPrivateCollectionRef('tasks'), { // Main focus is always private
                                 text: textarea.value.trim(),
                                 completed: false,
                                 date: dateString,
@@ -844,7 +842,7 @@
                                 ownerId: userId,
                                 createdAt: new Date().toISOString(),
                                 isMainFocus: true,
-                                isShared: false // Main focus is always private
+                                isShared: false
                             });
                         }
                     }
