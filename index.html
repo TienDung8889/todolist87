@@ -172,8 +172,14 @@
         // Global variables provided by Canvas environment
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         // Provide a default empty object for firebaseConfig if __firebase_config is not defined or empty
-        const firebaseConfig = (typeof __firebase_config !== 'undefined' && __firebase_config) ? JSON.parse(__firebase_config) : {};
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        const firebaseConfig = {
+		apiKey: "AIzaSyDTrYbSFy_A86Xh4xQaGMHyV4YlEZzTDag",
+		authDomain: "todolist87-7e181.firebaseapp.com",
+		projectId: "todolist87-7e181",
+		storageBucket: "todolist87-7e181.firebasestorage.app",
+		messagingSenderId: "99791674796",
+		appId: "1:99791674796:web:e083f0094ff672f915ae09",
+		measurementId: "G-EY28JXRBHT"
 
         // Initialize Firebase
         let app;
