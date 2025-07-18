@@ -79,9 +79,9 @@
             </div>
         </div>
 
-        <div class="flex flex-col lg:flex-row gap-6">
+        <div class="flex flex-col lg:grid lg:grid-cols-4 gap-6">
             <!-- Phần bên trái: Lịch và Thói quen hàng tuần -->
-            <div class="lg:w-1/4 flex flex-col gap-6">
+            <div class="lg:col-span-1 flex flex-col gap-6">
                 <!-- Phần Lịch Planner Week Start -->
                 <div class="bg-blue-50 p-4 rounded-lg shadow-md">
                     <h2 class="text-lg font-semibold text-blue-800 mb-3">Planner Week Start</h2>
@@ -157,7 +157,7 @@
             </div>
 
             <!-- Phần bên phải: Chi tiết công việc hàng ngày -->
-            <div id="dailyTaskCardsContainer" class="lg:w-3/4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div id="dailyTaskCardsContainer" class="lg:col-span-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-6">
                 <!-- Thẻ công việc cho các ngày sẽ được JS tạo động -->
             </div>
         </div>
@@ -165,6 +165,7 @@
 
     <!-- Firebase SDKs -->
     <script type="module">
+        // Đảm bảo các import này chỉ xuất hiện MỘT LẦN DUY NHẤT ở đầu thẻ <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, query, where, addDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
@@ -174,6 +175,7 @@
         // Your Firebase project configuration (replace with your actual config from Firebase Console)
         // LƯU Ý QUAN TRỌNG: Đảm bảo bạn đã BẬT phương thức xác thực "Anonymous" (Ẩn danh) trong Firebase Console của dự án này.
         // Nếu không, bạn sẽ gặp lỗi "auth/configuration-not-found".
+        // CHỈ THAY THẾ NỘI DUNG CỦA ĐỐI TƯỢNG firebaseConfig NÀY, KHÔNG DÁN THÊM CÁC DÒNG IMPORT HOẶC initializeApp KHÁC!
         const firebaseConfig = {
           apiKey: "AIzaSyDTrYbSFy_A86Xh4xQaGMHyV4YlEZzTDag",
           authDomain: "todolist87-7e181.firebaseapp.com",
@@ -191,14 +193,16 @@
         let firebaseInitializedSuccessfully = false; // New flag
 
         try {
-            if (Object.keys(firebaseConfig).length > 0 && firebaseConfig.apiKey && firebaseConfig.projectId) {
+            // Validate firebaseConfig before initializing
+            if (Object.keys(firebaseConfig).length > 0 && firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.authDomain) {
                 app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
                 firebaseInitializedSuccessfully = true;
                 console.log("Firebase app initialized successfully.");
             } else {
-                console.warn("Firebase config is incomplete or empty. Running in a limited mode without data persistence.");
+                console.error("Firebase config is incomplete or empty. Please check your firebaseConfig object.");
+                document.getElementById('userIdDisplay').textContent = "Lỗi cấu hình Firebase!";
                 // Create dummy Firebase objects to prevent errors if running without config
                 app = null;
                 db = null;
