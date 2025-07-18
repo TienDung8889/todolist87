@@ -172,6 +172,8 @@
         // Global variables provided by Canvas environment
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         // Your Firebase project configuration (replace with your actual config from Firebase Console)
+        // LƯU Ý QUAN TRỌNG: Đảm bảo bạn đã BẬT phương thức xác thực "Anonymous" (Ẩn danh) trong Firebase Console của dự án này.
+        // Nếu không, bạn sẽ gặp lỗi "auth/configuration-not-found".
         const firebaseConfig = {
           apiKey: "AIzaSyDTrYbSFy_A86Xh4xQaGMHyV4YlEZzTDag",
           authDomain: "todolist87-7e181.firebaseapp.com",
@@ -186,25 +188,44 @@
         let app;
         let db;
         let auth;
+        let firebaseInitializedSuccessfully = false; // New flag
 
-        if (Object.keys(firebaseConfig).length > 0) {
-            app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            auth = getAuth(app);
-        } else {
-            console.warn("Firebase config not found. Running in a limited mode without data persistence.");
-            // Create dummy Firebase objects to prevent errors if running without config
+        try {
+            if (Object.keys(firebaseConfig).length > 0 && firebaseConfig.apiKey && firebaseConfig.projectId) {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                firebaseInitializedSuccessfully = true;
+                console.log("Firebase app initialized successfully.");
+            } else {
+                console.warn("Firebase config is incomplete or empty. Running in a limited mode without data persistence.");
+                // Create dummy Firebase objects to prevent errors if running without config
+                app = null;
+                db = null;
+                auth = {
+                    currentUser: { uid: 'local-user-dummy' }, // Use a distinct dummy ID
+                    onAuthStateChanged: (callback) => {
+                        callback({ uid: 'local-user-dummy' });
+                        return () => {};
+                    },
+                    signInAnonymously: async () => {
+                        console.warn("Attempted anonymous sign-in in dummy mode.");
+                        return { user: { uid: 'local-user-dummy' } };
+                    },
+                    signInWithCustomToken: async () => {
+                        console.warn("Attempted custom token sign-in in dummy mode.");
+                        return { user: { uid: 'local-user-dummy' } };
+                    }
+                };
+            }
+        } catch (initError) {
+            console.error("Error initializing Firebase app:", initError);
+            document.getElementById('userIdDisplay').textContent = "Lỗi khởi tạo Firebase!";
+            // Ensure auth, db, app are null if initialization fails
             app = null;
             db = null;
-            auth = {
-                currentUser: { uid: 'local-user' },
-                onAuthStateChanged: (callback) => {
-                    callback({ uid: 'local-user' });
-                    return () => {};
-                },
-                signInAnonymously: async () => ({ user: { uid: 'local-user' } }),
-                signInWithCustomToken: async () => ({ user: { uid: 'local-user' } })
-            };
+            auth = null;
+            firebaseInitializedSuccessfully = false;
         }
 
         let userId = null;
@@ -218,13 +239,13 @@
         let weeklyTaskProgressChart = null; // Stores instance of line chart
 
         // --- Firebase Authentication ---
-        if (auth) { // Only attach listener if auth is properly initialized
+        if (firebaseInitializedSuccessfully && auth) { // Only attach listener if auth is properly initialized
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
                     userId = user.uid;
                     document.getElementById('userIdDisplay').textContent = userId;
                     isAuthReady = true;
-                    console.log("Firebase initialized and authenticated. User ID:", userId);
+                    console.log("Firebase authenticated. User ID:", userId);
                     await initializeAppData(); // Load data after authentication
                 } else {
                     // Sign in anonymously if no initial token
@@ -232,18 +253,20 @@
                         // The initialAuthToken is only provided by the Canvas environment.
                         // When running locally or deployed via GitHub Pages, it will be null.
                         // In such cases, we always sign in anonymously.
+                        console.log("Attempting anonymous sign-in...");
                         await signInAnonymously(auth);
+                        console.log("Anonymous sign-in successful.");
                     } catch (error) {
                         console.error("Error signing in:", error);
                         document.getElementById('userIdDisplay').textContent = "Lỗi xác thực!";
                     }
                 }
             });
-        } else { // If auth is dummy, immediately set user ID and initialize app
-            userId = 'local-user';
+        } else { // If Firebase initialization failed or auth is dummy
+            userId = 'local-user-fallback'; // Another distinct dummy ID
             document.getElementById('userIdDisplay').textContent = userId;
             isAuthReady = true;
-            console.log("Running in local mode with dummy user ID.");
+            console.log("Running in local mode with fallback dummy user ID (Firebase not fully initialized).");
             renderApp(); // Render immediately for local mode
             document.getElementById('loadingIndicator').classList.add('hidden');
         }
